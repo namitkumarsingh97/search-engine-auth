@@ -25,6 +25,20 @@ export function resolveReturnUrl(param: string | null): URL | null {
   return null;
 }
 
+/**
+ * Where the Nexa logo links to: the home page of the main app, taken from this app's own
+ * configuration (NEXT_PUBLIC_DEFAULT_RETURN_URL), never from the ?return= in the page address,
+ * so a crafted link can't turn the logo into a link to another site. Null if not configured.
+ */
+export function homeUrl(): string | null {
+  try {
+    const url = new URL(DEFAULT_RETURN);
+    return url.protocol === "http:" || url.protocol === "https:" ? url.origin : null;
+  } catch {
+    return null;
+  }
+}
+
 export interface SignInInput {
   mode: "login" | "register";
   returnUrl: URL;
