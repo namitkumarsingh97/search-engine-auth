@@ -122,14 +122,26 @@ function Form({ mode }: { mode: "login" | "register" }) {
               {handleStatus.state === "checking" && "Checking…"}
               {handleStatus.state === "ok" && `${handle}@${MAIL_DOMAIN} is yours if you want it.`}
               {handleStatus.state === "bad" && handleStatus.message}
-              {handleStatus.state === "idle" && "This is where people write to you inside Nexa. Leave it empty and we'll pick one."}
+              {handleStatus.state === "idle" && "This is your Nexa address and your sign-in name. Leave it empty and we'll pick one from your name."}
             </p>
           </div>
         )}
-        <div>
-          <label className={label}>Email</label>
-          <input className="input" type="email" value={email} required autoComplete="email" onChange={(e) => setEmail(e.target.value)} />
-        </div>
+        {!isRegister && (
+          <div>
+            <label className={label}>Nexa address</label>
+            <input
+              className="input"
+              type="text"
+              value={email}
+              required
+              autoComplete="username"
+              autoCapitalize="none"
+              spellCheck={false}
+              placeholder={`you@${MAIL_DOMAIN}`}
+              onChange={(e) => setEmail(e.target.value)}
+            />
+          </div>
+        )}
         <div>
           <label className={label}>Password</label>
           <input

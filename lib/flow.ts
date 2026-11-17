@@ -42,6 +42,7 @@ export function homeUrl(): string | null {
 export interface SignInInput {
   mode: "login" | "register";
   returnUrl: URL;
+  /** Sign in only: the Nexa address (or just the name before @). */
   email: string;
   password: string;
   name?: string;
@@ -52,11 +53,12 @@ export interface SignInInput {
 /** Signs in (or up) and resolves to the address to send the user back to, with the one-time code attached. */
 export async function signIn(input: SignInInput, state: string | null): Promise<string> {
   const body: Record<string, string> = {
-    email: input.email,
     password: input.password,
     redirectUri: input.returnUrl.toString(),
   };
-  if (input.mode === "register") {
+  // Sign-in uses the Nexa address; sign-up needs no email at all (the address is the account).
+  if (input.mode === "login") body.email = input.email;
+  else {
     body.name = input.name ?? "";
     if (input.handle?.trim()) body.handle = input.handle.trim();
   }
