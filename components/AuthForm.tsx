@@ -2,8 +2,8 @@
 
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
-import { FormEvent, Suspense, useMemo, useState } from "react";
-import { resolveReturnUrl, signIn } from "@/lib/flow";
+import { FormEvent, Suspense, useEffect, useMemo, useState } from "react";
+import { checkHandle, MAIL_DOMAIN, resolveReturnUrl, signIn, suggestHandle } from "@/lib/flow";
 
 function Form({ mode }: { mode: "login" | "register" }) {
   const params = useSearchParams();
@@ -12,6 +12,9 @@ function Form({ mode }: { mode: "login" | "register" }) {
   const returnUrl = useMemo(() => resolveReturnUrl(returnParam), [returnParam]);
 
   const [name, setName] = useState("");
+  const [handle, setHandle] = useState("");
+  const [handleEdited, setHandleEdited] = useState(false);
+  const [handleStatus, setHandleStatus] = useState<{ state: "idle" | "checking" | "ok" | "bad"; message?: string }>({ state: "idle" });
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
@@ -20,13 +23,35 @@ function Form({ mode }: { mode: "login" | "register" }) {
 
   const isRegister = mode === "register";
 
+  // Until the person types their own, the address follows their name.
+  useEffect(() => {
+    if (isRegister && !handleEdited) setHandle(suggestHandle(name));
+  }, [name, handleEdited, isRegister]);
+
+  // Check the address with the server a moment after they stop typing.
+  useEffect(() => {
+    if (!isRegister) return;
+    if (!handle.trim()) return setHandleStatus({ state: "idle" });
+    setHandleStatus({ state: "checking" });
+    let stale = false;
+    const t = setTimeout(() => {
+      checkHandle(handle)
+        .then((r) => !stale && setHandleStatus(r.available ? { state: "ok" } : { state: "bad", message: r.error ?? "That address isn't available." }))
+        .catch(() => !stale && setHandleStatus({ state: "idle" }));
+    }, 400);
+    return () => {
+      stale = true;
+      clearTimeout(t);
+    };
+  }, [handle, isRegister]);
+
   async function onSubmit(e: FormEvent) {
     e.preventDefault();
     if (!returnUrl) return;
     setError(null);
     setBusy(true);
     try {
-      const target = await signIn({ mode, returnUrl, email, password, name }, state);
+      const target = await signIn({ mode, returnUrl, email, password, name, handle }, state);
       setRedirecting(true);
       window.location.assign(target);
     } catch (err) {
@@ -71,6 +96,36 @@ function Form({ mode }: { mode: "login" | "register" }) {
             <input className="input" value={name} required autoComplete="name" onChange={(e) => setName(e.target.value)} />
           </div>
         )}
+        {isRegister && (
+          <div>
+            <label className={label}>Your Nexa address</label>
+            <div className="flex items-stretch">
+              <input
+                className="input !border-r-0"
+                value={handle}
+                autoComplete="off"
+                spellCheck={false}
+                placeholder="ada.lovelace"
+                onChange={(e) => {
+                  setHandleEdited(true);
+                  setHandle(e.target.value.toLowerCase());
+                }}
+              />
+              <span className="flex items-center border-2 border-line bg-surface2 px-3 text-sm font-bold">@{MAIL_DOMAIN}</span>
+            </div>
+            <p
+              className={`mt-1.5 text-xs font-semibold ${
+                handleStatus.state === "bad" ? "text-danger" : handleStatus.state === "ok" ? "text-ok" : "text-mute"
+              }`}
+              aria-live="polite"
+            >
+              {handleStatus.state === "checking" && "Checking…"}
+              {handleStatus.state === "ok" && `${handle}@${MAIL_DOMAIN} is yours if you want it.`}
+              {handleStatus.state === "bad" && handleStatus.message}
+              {handleStatus.state === "idle" && "This is where people write to you inside Nexa. Leave it empty and we'll pick one."}
+            </p>
+          </div>
+        )}
         <div>
           <label className={label}>Email</label>
           <input className="input" type="email" value={email} required autoComplete="email" onChange={(e) => setEmail(e.target.value)} />
@@ -91,7 +146,7 @@ function Form({ mode }: { mode: "login" | "register" }) {
 
         {error && <p className="border-2 border-danger px-3 py-2 text-sm font-bold text-danger">{error}</p>}
 
-        <button type="submit" disabled={busy || !returnUrl} className="btn-primary w-full py-3.5">
+        <button type="submit" disabled={busy || !returnUrl || (isRegister && handleStatus.state === "bad")} className="btn-primary w-full py-3.5">
           {redirecting ? "Taking you back…" : busy ? "Please wait…" : isRegister ? "Create account" : "Sign in"}
         </button>
 

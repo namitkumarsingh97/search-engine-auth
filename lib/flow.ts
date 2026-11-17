@@ -45,6 +45,8 @@ export interface SignInInput {
   email: string;
   password: string;
   name?: string;
+  /** Register only: the part before @nexa.com. Left empty, the API makes one from the name. */
+  handle?: string;
 }
 
 /** Signs in (or up) and resolves to the address to send the user back to, with the one-time code attached. */
@@ -54,7 +56,10 @@ export async function signIn(input: SignInInput, state: string | null): Promise<
     password: input.password,
     redirectUri: input.returnUrl.toString(),
   };
-  if (input.mode === "register") body.name = input.name ?? "";
+  if (input.mode === "register") {
+    body.name = input.name ?? "";
+    if (input.handle?.trim()) body.handle = input.handle.trim();
+  }
 
   const res = await fetch(`${API_URL}/auth/${input.mode}`, {
     method: "POST",
@@ -69,4 +74,31 @@ export async function signIn(input: SignInInput, state: string | null): Promise<
   target.searchParams.set("code", data.code);
   if (state) target.searchParams.set("state", state);
   return target.toString();
+}
+
+/** The part after @ in Nexa addresses (display only: the API decides what is valid). */
+export const MAIL_DOMAIN = process.env.NEXT_PUBLIC_MAIL_DOMAIN ?? "nexa.com";
+
+export interface HandleCheck {
+  available: boolean;
+  error?: string | null;
+}
+
+/** Asks the API whether a Nexa address name is valid and free. */
+export async function checkHandle(handle: string): Promise<HandleCheck> {
+  const res = await fetch(`${API_URL}/auth/handle-available?handle=${encodeURIComponent(handle)}`);
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) return { available: false, error: data.error ?? "Couldn't check that name right now." };
+  return { available: Boolean(data.available), error: data.error ?? null };
+}
+
+/** A starting suggestion for the address from someone's name: "Ada Lovelace" -> "ada.lovelace". */
+export function suggestHandle(name: string): string {
+  return name
+    .toLowerCase()
+    .normalize("NFKD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^a-z0-9]+/g, ".")
+    .replace(/^\.+|\.+$/g, "")
+    .slice(0, 24);
 }
